@@ -1,0 +1,318 @@
+﻿@model List<InternetMarket.Web.Models.ProductViewModel>
+
+@{
+    const int ROWS_PER_PAGE = 10;
+    ViewBag.Title = "Products";
+    var grid = new WebGrid(canPage: true, rowsPerPage: ROWS_PER_PAGE);
+    grid.Bind(source: Model, rowCount: ViewBag.TotalRows, autoSortAndPage: false);
+
+}
+
+<div>
+    <h3>Products</h3>
+
+    <nav class="navbar navbar-default">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <a href="#" class="navbar-brand">Search</a>
+            </div>
+            <div class="collapse navbar-collapse">
+                @using (Html.BeginForm("Products", "Product", FormMethod.Get, new { @class = "navbar-form navbar-left" }))
+                {
+                    <div class="form-group">
+                        <input type="text" name="search" value="@ViewBag.Search" class="form-control" placeholder="search" />
+                    </div>
+                    <button type="submit" value="Search" class="btn btn-success">Search</button>
+                }
+            </div>
+        </div>
+    </nav>
+    <div>
+        @if (Request.IsAuthenticated)
+        {
+            if (User.IsInRole("Customer"))
+            {
+                @grid.Table(
+                    tableStyle: "table table-responsive table-bordered editableTable",
+                    columns: grid.Columns(
+                     grid.Column(columnName: "ProductName", header: "Product Name"),
+                     grid.Column(columnName: "Description", header: "Description"),
+                     grid.Column(columnName: "Category", header: "Category"),
+                     grid.Column(columnName: "Rate", header: "Rate", format: @<div>
+                            @if (item.IsVoted)
+                             {
+                                <div>@item.Rate</div>
+                            }
+                            else
+                            {
+                                <form action="/Product/Vote" 
+                                      class="voteForm"
+                                      method="post">
+                                    <input type="hidden" name="productName" value="@item.ProductName" />
+                                    <select name="rate" style="min-width:40px; border-radius: 5px;">
+                                        @for (int i = 1; i <= 5; i++)
+                                        {
+                                            <option>@i</option>
+                                        }
+                                    </select>
+                                    <input type="button" value="Vote" class="btn btn-success btn-sm voteButton" />
+                                </form>
+                             }
+                        </div>),
+                    grid.Column(columnName: "Price", header: "Price"),
+                    grid.Column(columnName: "Add", header: "Add", canSort: false, format:
+                        @<button class="btn btn-success addToCartButton"
+                                 data-content="@item.ProductName">
+                             <i class="far fa-plus-square"> To cart</i>
+                        </button>)
+                   )
+                )
+            }
+            else if (User.IsInRole("Admin"))
+            {
+                <a style="margin-bottom:10px;"
+                   class="btn btn-success"
+                   onclick="PopupForm('@Url.Action("AddOrEdit", "Product")')">
+                    <i class="fas fa-plus"></i> Add New
+                </a>
+                @grid.Table(
+                    tableStyle: "table table-responsive table-bordered editableTable",
+                    columns: grid.Columns(
+                        grid.Column(columnName: "ProductName", header: "Product Name"),
+                        grid.Column(columnName: "Description", header: "Description"),
+                        grid.Column(columnName: "Category", header: "Category"),
+                        grid.Column(columnName: "Rate", header: "Rate"),
+                        grid.Column(columnName: "Price", header: "Price"),
+                        grid.Column(columnName: "ControlPanel", header: "ControlPanel", canSort: false, format:
+                                @<div>
+                                    <button class="btn btn-default btn-sm"
+                                            onclick="PopupForm('@Url.Action("AddOrEdit", 
+                                                                            "Product", 
+                                                                            new { productName = item.ProductName})')">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button class="btn btn-primary btn-sm removeButton"
+                                            data-content="@item.ProductName">
+                                        <i class="fas fa-trash-alt"></i> Remove
+                                    </button>
+                                </div>)
+                         ))
+            }
+        }
+        else
+        {
+            @grid.Table(
+            tableStyle: "table table-responsive table-bordered",
+            columns: grid.Columns(
+                grid.Column(columnName: "ProductName", header: "Product Name"),
+                grid.Column(columnName: "Description", header: "Description"),
+                grid.Column(columnName: "Category", header: "Category"),
+                grid.Column(columnName: "Rate", header: "Rate"),
+                grid.Column(columnName: "Price", header: "Price")
+            ))
+        }
+
+        <div class="row">
+            <div class="col-sm-6 editablePagination">
+                @grid.PagerList(mode: WebGridPagerModes.All, paginationStyle: "pagination pagination-small pagination-right")
+            </div>
+        </div>
+    </div>
+
+    @Html.Hidden("dir", grid.SortDirection)
+    @Html.Hidden("col", grid.SortColumn)
+
+</div>
+
+@section scripts {
+
+    <script>
+        $(function () {
+            try {
+                var dir = $('#dir').val();
+                var col = $('#col').val();
+
+                var header = $("th a[href*=" + col + "]");
+                if (dir == "Ascending") {
+                    header.text(header.text() + " 🠹");
+                }
+                if (dir == "Descending") {
+                    header.text(header.text() + " 🠻");
+                }
+            }
+            catch (e) {
+
+            }
+        })
+    </script>
+    <script>
+        var Popup;
+        var dataTable = $('.editableTable');
+        
+        function PopupForm(url) {
+            var formDiv = $('<div/>');
+            $.get(url)
+                .done(function (response) {
+                    formDiv.html(response);
+                    Popup = formDiv.dialog({
+                        autoOpen: true,
+                        resizable: false,
+                        title: 'Fill product details',
+                        height: 500,
+                        width: 600,
+                        close: function () {
+                            Popup.dialog('destroy').remove();
+                        }
+                    });
+                })
+
+        }
+        var productsCounter = @ViewBag.TotalRows
+        function SubmitForm(form) {
+            $.validator.unobtrusive.parse(form);
+
+            if ($(form).valid()) {
+                $.ajax({
+                    type: "POST",
+                    url: form.action,
+                    data: $(form).serialize(),
+                    success: function (data) {
+                        if (data.success == true) {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "success"
+                            });
+                            
+                            if (form.OldProductName.value == "") { // Add an element
+                                productsCounter++;
+
+                                if (productsCounter != 1 && productsCounter % @ROWS_PER_PAGE == 1) {
+                                    $('.editablePagination').load(location.href + ' .pagination')
+                                }
+                                
+                                $('.editableTable').load(location.href + ' thead, tbody')
+                            }
+                            else // edit an element
+                                $('.editableTable').load(location.href + ' thead, tbody')
+
+                            Popup.dialog('close');
+                        }
+                        else {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "error"
+                            });
+                        }
+                    }
+                });
+            }
+            return false;
+            }
+
+        $(document).on('click', '.removeButton', function () {
+            var inquire = confirm('Are you sure?');
+
+            if (inquire == true) {
+                $.ajax({
+                    type: "POST",
+                    url: '@Url.Action("Remove", "Product")',
+                    data: { productName: $(this).data('content') },
+                    success: function (data) {
+                        if (data.success == true) {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "success"
+                            });
+                            productsCounter--;
+
+                            if (productsCounter % 10 == 0) { // change a page
+                                var pageNum = @grid.PageIndex;
+                                // get address without parameters
+                                var url = location.href.slice(0, location.href.indexOf('?'))
+                                url = url + "?page=" + pageNum
+                                location.replace(url)
+                            }
+                            else
+                                $('.editableTable').load(location.href + ' thead, tbody')
+                        }
+                        else {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "error"
+                            });
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+    <script>
+        function OnSuccessVote(data) {
+            if (data.success) {
+                $.notify(data.message, {
+                    globalPosition: "top center",
+                    className: "success"
+                });
+            }
+            else {
+                $.notify(data.message, {
+                    globalPosition: "top center",
+                    className: "error"
+                });
+            }
+        }
+
+        $(document).on('click', '.voteButton', function () {
+            var form = $(this).closest('form')
+
+            $.ajax({
+                    type: "POST",
+                    url: form.attr('action'),
+                    data: form.serialize(),
+                    success: function (data) {
+                        if (data.success == true) {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "success"
+                            });
+
+                            $('.editableTable').load(location.href + ' thead, tbody')
+                        }
+                        else {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "error"
+                            });
+                        }
+                    }
+                });
+        })
+
+        $(document).on('click', '.addToCartButton', function () {
+            $.ajax({
+                    type: "POST",
+                    url: '@Url.Action("AddToCart", "Product")',
+                    data: { productName: $(this).data('content') },
+                    success: function (data) {
+                        if (data.success == true) {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "success"
+                            });
+                        }
+                        else {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "error"
+                            });
+                        }
+                    }
+                });
+        }) 
+    </script>
+}
+
+
+
+
+

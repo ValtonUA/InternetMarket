@@ -1,0 +1,30 @@
+﻿@if (Request.IsAuthenticated)
+{
+
+    using (Html.BeginForm("Logout", "Account", FormMethod.Post, new { id = "logoutForm", @class = "navbar-right" }))
+    {
+    @Html.AntiForgeryToken()
+
+    <ul class="nav navbar-nav navbar-right">
+        @if (User.IsInRole("Customer"))
+        {
+        <li>
+            <a href="@Url.Action("Cart", "Order")">
+                <img height="25" width="25" src="~/Content/cart_image.png" />
+            </a>
+        </li>
+        }
+        <li>
+            @Html.ActionLink("Hello, " + User.Identity.Name + "!", "Index", "Home", routeValues: null, htmlAttributes: new { title = "Manage" })
+        </li> 
+        <li><a href="javascript:document.getElementById('logoutForm').submit()">Выйти</a></li>
+    </ul>
+    }
+}
+else
+{
+    <ul class="nav navbar-nav navbar-right">
+        <li>@Html.ActionLink("Register", "Register", "Account", routeValues: null, htmlAttributes: new { id = "registerLink" })</li>
+        <li>@Html.ActionLink("Login", "Login", "Account", routeValues: null, htmlAttributes: new { id = "loginLink" })</li>
+    </ul>
+}

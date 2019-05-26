@@ -1,0 +1,150 @@
+﻿@model List<InternetMarket.Web.Models.ProductViewModel>
+
+@{
+    ViewBag.Title = "Cart";
+    var grid = new WebGrid(canPage: true, rowsPerPage: 10);
+    grid.Bind(source: Model, rowCount: ViewBag.TotalRows, autoSortAndPage: false);
+}
+
+<div>
+    <div>
+        <div>
+            <h2 id="productsInCart">@ViewBag.TotalRows items in your cart</h2>
+            <input type="button"
+                   value="Remove all"
+                   class="btn btn-danger"
+                   id="removeAllFromCartButton"
+                   style="margin-bottom: 10px;"/>
+        </div>
+
+        <div>
+            @grid.Table(
+                tableStyle: "table table-responsive table-bordered editableTable",
+                columns: grid.Columns(
+                    grid.Column(columnName: "ProductName", header: "Product Name"),
+                    grid.Column(columnName: "Description", header: "Description"),
+                    grid.Column(columnName: "Category", header: "Category"),
+                    grid.Column(columnName: "Rate", header: "Rate"),
+                    grid.Column(columnName: "Price", header: "Price"),
+                    grid.Column(columnName: "Remove", header: "Remove", canSort: false, format:
+                                                @<input type="button"
+                                                        class="btn btn-danger removeFromCartButton"
+                                                        value="Remove"
+                                                        data-content="@item.ProductName" />)
+
+                    )
+            )
+        </div>
+    
+        <div class="row">
+            <div class="col-sm-6">
+                @grid.PagerList(mode: WebGridPagerModes.All, paginationStyle: "pagination pagination-small pagination-right")
+            </div>
+        </div>
+     </div>
+
+    @if (Model.Count > 0)
+    {
+        using (Html.BeginForm("Checkout", "Order", FormMethod.Post, new { @class = "navbar-form" }))
+        {
+            <div class="form-group">
+                <label class="control-label">Select the appointment</label>
+                <input type="text" required name="location" class="form-control" placeholder="location" />
+                <button type="submit" class="btn btn-success">Proceed to checkout</button>
+            </div>
+        }
+    }
+    else
+    {
+        <h3>Your cart is empty! Go to @Html.ActionLink("Product list", "Products", "Product") and add some stuff</h3>
+    }
+
+
+    @Html.Hidden("dir", grid.SortDirection)
+    @Html.Hidden("col", grid.SortColumn)
+</div>
+
+@section scripts {
+    <script>
+        $(function () {
+            try {
+                var dir = $('#dir').val();
+                var col = $('#col').val();
+                var header = $("th a[href*=" + col + "]");
+                if (dir == "Ascending") {
+                    header.text(header.text() + " 🠹");
+                }
+                if (dir == "Descending") {
+                    header.text(header.text() + " 🠻");
+                }
+            }
+            catch (e) {
+
+            }
+        })
+    </script>
+    <script>
+        var productsInCart = @ViewBag.TotalRows;
+        if (productsInCart == 0)
+            $('#removeAllFromCartButton').attr('disabled', true);
+
+        $(document).on('click', '#removeAllFromCartButton', function () {
+            $.ajax({
+                    type: "POST",
+                    url: '@Url.Action("RemoveAll", "Order")',
+                    success: function (data) {
+                        if (data.success == true) {
+                            location.reload();
+                        }
+                        else {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "error"
+                            });
+                        }
+                    }
+            });
+        })
+        
+        $(document).on('click', '.removeFromCartButton', function () {
+            $.ajax({
+                type: "POST",
+                url: '@Url.Action("Remove", "Order")',
+                data: { productName: $(this).data('content') },
+                success: function (data) {
+                    if (data.success == true) {
+                        $.notify(data.message, {
+                            globalPosition: "top center",
+                            className: "success"
+                        })
+                        
+                         //refresh data
+                        if (productsInCart == 1) // removed the last element
+                            location.reload()
+                        else if (productsInCart % 10 == 1) { // change a page
+                            var pageNum = @grid.PageIndex;
+                            // get address without parameters
+                            var url = location.href.slice(0, location.href.indexOf('?'))
+                            url = url + "?page=" + pageNum
+                            location.replace(url)
+                        }
+                        else { // local reloading
+                            $('.editableTable').load(location.href + " thead, tbody")
+                            $('#productsInCart').html(--productsInCart + " items in your cart")
+                        }
+
+                    }
+                    else {
+                        $.notify(data.message, {
+                            globalPosition: "top center",
+                            className: "error"
+                        });
+                    }
+                }
+            });
+        })
+    </script>
+}
+
+
+

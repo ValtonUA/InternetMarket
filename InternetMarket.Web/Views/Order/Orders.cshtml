@@ -1,0 +1,189 @@
+﻿@model List<InternetMarket.Web.Models.OrderViewModel>
+
+@{
+    ViewBag.Title = "Orders";
+    var grid = new WebGrid(canPage: true, rowsPerPage: 10);
+    grid.Bind(source: Model, rowCount: ViewBag.TotalRows, autoSortAndPage: false);
+}
+
+<div>
+    <h2>Orders</h2>
+
+    <nav class="navbar navbar-default">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <a href="#" class="navbar-brand">Search</a>
+            </div>
+            <div class="collapse navbar-collapse">
+                @using (Html.BeginForm("Orders", "Order", FormMethod.Get, new { @class = "navbar-form navbar-left" }))
+                {
+                    <div class="form-group">
+                        <input type="text" name="search" value="@ViewBag.Search" class="form-control" placeholder="search" />
+                    </div>
+                    <button type="submit" value="Search" class="btn btn-success">Search</button>
+                }
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-bottom: 15px">
+        @using (Html.BeginForm("RemoveByStatus", "Order", FormMethod.Post, new { @class = "form-horizontal" }))
+        {
+            <div class="form-group">
+                <label class="control-label">Remove from category</label>
+                <select name="status">
+                    @foreach (InternetMarket.Domain.Core.Status s in ViewBag.Statuses)
+                    {
+                        <option>@s.StatusName</option>       
+                    }
+                </select>
+                <button type="button" class="btn btn-success" id="removeByStatusButton">Remove</button>
+            </div>
+        }
+    </div>
+    
+    @grid.Table(
+            tableStyle: "table table-responsive table-bordered editableTable",
+            htmlAttributes: new { @id = "OrderTable"},
+            columns: grid.Columns(
+                grid.Column(columnName: "OrderId", header: "OrderId"),
+                grid.Column(columnName: "Status", header: "Status (click to edit)", format: 
+                @<div class="editSelect" data-id="@item.OrderId"><p>@item.Status</p></div>),
+                grid.Column(columnName: "Location", header: "Location"),
+                grid.Column(columnName: "UserLogin", header: "UserLogin"),
+                grid.Column(columnName: "Date", header: "Date"),
+                grid.Column(columnName: "ProductNames", header: "Products", canSort: false, format: @<div>
+                        <select style="min-width: 100px">
+                            @foreach (string productName in item.ProductNames)
+                             {
+                                <option>@productName</option>
+                             }
+
+                        </select>
+                </div>)))
+
+    @if (!string.IsNullOrEmpty(ViewBag.Message))
+    {
+        <div>@ViewBag.Message</div>
+    }
+
+    <div class="row">
+        <div class="col-sm-6 editablePagination">
+            @grid.PagerList(mode: WebGridPagerModes.All, paginationStyle: "pagination pagination-small pagination-right")
+        </div>
+    </div>
+
+    @Html.Hidden("dir", grid.SortDirection)
+    @Html.Hidden("col", grid.SortColumn)
+</div>
+
+
+@section scripts {
+    <script>
+        $(function () {
+            try {
+                var dir = $('#dir').val();
+                var col = $('#col').val();
+
+                var header = $("th a[href*=" + col + "]");
+                if (dir == "Ascending") {
+                    header.text(header.text() + " 🠹");
+                }
+                if (dir == "Descending") {
+                    header.text(header.text() + " 🠻");
+                }
+            }
+            catch (e) {
+
+            }
+        })
+    </script>
+    <script>
+        function HandleElemSelectClick() {
+            var currentElem = $(this);
+            $(this).hide(); // hide text
+            
+            // Select element
+            var select = document.createElement('select');
+
+            $.get('/Order/GetStatuses', function (data) {
+                for (var i = 0; i < data.length; i++) {
+                    var opt = document.createElement('option');
+                    opt.textContent = data[i];
+                    select.append(opt);
+                }
+            })
+
+            // Ok button
+            var OkBtn = document.createElement('button');
+            OkBtn.className = 'btn btn-primary btn-sm';
+            OkBtn.style = "margin-left:5px;"
+            OkBtn.textContent = 'Ok';
+            OkBtn.onclick = function () {
+                $.post('/Order/ChangeStatus', {
+                    orderId: currentElem.parents('.editSelect').data('id'),
+                    status: select.value
+                })
+                OkBtn.parentElement.removeChild(OkBtn)
+                CancelBtn.parentElement.removeChild(CancelBtn)
+                select.parentElement.removeChild(select)
+
+                currentElem.text(select.value)
+                currentElem.show();
+            };
+
+            // Cancel button
+            var CancelBtn = document.createElement('button');
+            CancelBtn.className = 'btn btn-danger btn-sm';
+            CancelBtn.style = "margin-left:5px;"
+            CancelBtn.textContent = 'Back';
+            CancelBtn.onclick = function () {
+                OkBtn.parentElement.removeChild(OkBtn)
+                CancelBtn.parentElement.removeChild(CancelBtn)
+                select.parentElement.removeChild(select)
+                currentElem.show();
+            };
+
+            $(this).parents('.editSelect').append(select);
+            $(this).parents('.editSelect').append(OkBtn);
+            $(this).parents('.editSelect').append(CancelBtn);
+        }
+
+        $(document).on('click', '.editSelect p', HandleElemSelectClick)
+    </script>
+    <script>
+        $('#removeByStatusButton').on('click', function () {
+            var inquire = confirm('Are you sure?');
+
+            if (inquire == true) {
+                var form = $(this).closest('form')
+
+                $.ajax({
+                    type: "POST",
+                    url: '@Url.Action("RemoveByStatus", "Order")',
+                    data: form.serialize(),
+                    success: function (data) {
+                        if (data.success == true) {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "success"
+                            });
+
+                            $('.editableTable').load(location.href + ' thead, tbody')
+                            $('.editablePagination').load(location.href + ' .pagination')
+                        }
+                        else {
+                            $.notify(data.message, {
+                                globalPosition: "top center",
+                                className: "error"
+                            });
+                        }
+                    }
+                });
+            }
+        })
+    </script>
+}
+
+
+
